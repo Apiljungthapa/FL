@@ -1,0 +1,8 @@
+node_modules/
+dist/
+.DS_Store
+php-api/data/*
+!php-api/data/.htaccess
+package-lock 2.json
+php-api.zip
+.claude/
