@@ -1147,13 +1147,31 @@ button { font-family: inherit; cursor: pointer; }
 
 /* ---------------- TECH STACK ---------------- */
 .fl-tech-stack { background: var(--paper-alt); }
-.fl-tools-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(118px, 1fr));
-  gap: 20px;
+.fl-tools-marquee {
   margin-top: clamp(32px, 4vw, 48px);
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent);
+  mask-image: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent);
+}
+.fl-tools-track {
+  display: flex;
+  width: max-content;
+  gap: 20px;
+  animation: flToolsMarquee 26s linear infinite;
+}
+.fl-tools-marquee:hover .fl-tools-track {
+  animation-play-state: paused;
+}
+@keyframes flToolsMarquee {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .fl-tools-track { animation: none; }
 }
 .fl-tool-card {
+  flex: 0 0 auto;
+  width: 150px;
   display: flex;
   flex-direction: column;
   align-items: center;

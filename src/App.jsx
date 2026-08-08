@@ -1282,17 +1282,19 @@ function TechStack() {
           </div>
         </Reveal>
         <Reveal>
-          <div className="fl-tools-grid">
-            {tools.map((t) => (
-              <div className="fl-tool-card" key={t.name}>
-                {t.logo ? (
-                  <img src={t.logo} alt={`${t.name} logo`} className="fl-tool-logo" />
-                ) : (
-                  t.mark
-                )}
-                <span className="fl-tool-name">{t.name}</span>
-              </div>
-            ))}
+          <div className="fl-tools-marquee">
+            <div className="fl-tools-track">
+              {[...tools, ...tools].map((t, i) => (
+                <div className="fl-tool-card" key={`${t.name}-${i}`} aria-hidden={i >= tools.length}>
+                  {t.logo ? (
+                    <img src={t.logo} alt={`${t.name} logo`} className="fl-tool-logo" />
+                  ) : (
+                    t.mark
+                  )}
+                  <span className="fl-tool-name">{t.name}</span>
+                </div>
+              ))}
+            </div>
           </div>
         </Reveal>
       </div>
