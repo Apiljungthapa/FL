@@ -4,9 +4,11 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "vite build",
-    "preview": "vite preview"
+    "start": "node scripts/dev.mjs",
+    "dev": "node node_modules/vite/bin/vite.js",
+    "api": "python -m uvicorn backend.main:app --port 8000",
+    "build": "node node_modules/vite/bin/vite.js build",
+    "preview": "node node_modules/vite/bin/vite.js preview"
   },
   "dependencies": {
     "react": "^18.3.1",

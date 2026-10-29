@@ -7,3 +7,6 @@ ReactDOM.createRoot(document.getElementById('root')).render(
     <App />
   </React.StrictMode>
 );
+
+// Tell the loader in index.html the first render is on screen.
+requestAnimationFrame(() => window.flReady?.());

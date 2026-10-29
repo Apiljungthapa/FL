@@ -1,8 +1,10 @@
 node_modules/
 dist/
 .DS_Store
-php-api/data/*
-!php-api/data/.htaccess
+backend/data/*
+!backend/data/.gitkeep
+backend/.env
+.venv/
+__pycache__/
 package-lock 2.json
-php-api.zip
 .claude/

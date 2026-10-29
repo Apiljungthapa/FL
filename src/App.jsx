@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import "./App.css";
 import logoMark from "./assets/logo.png";
@@ -18,11 +18,9 @@ import cpaFirmSupportImg from "./assets/services/cpa-firm-support.jpeg";
 import amritImg from "./assets/Amrit1.jpeg";
 import anupamImg from "./assets/Anupam.png";
 import basantaImg from "./assets/Basanta.jpeg";
-import diwasImg from "./assets/Diwas.jpeg";
-import samirImg from "./assets/Samir.jpeg";
-import utsabImg from "./assets/utsav_bhandari.jpeg";
-import prashantImg from "./assets/prashant_joshi.jpeg";
-import anamolImg from "./assets/anamol_sitaula.jpeg";
+import aishwaryaImg from "./assets/aishwarya_shrestha.jpeg";
+import apilImg from "./assets/apil_thapa.jpeg";
+import sarojImg from "./assets/saroj_timsina.jpeg";
 import realEstateImg from "./assets/industries/real-estate.jpeg";
 import accountingImg from "./assets/industries/accounting.jpeg";
 import constructionImg from "./assets/industries/construction.jpeg";
@@ -125,6 +123,190 @@ function CountUp({ end, suffix = "", formatter, duration = 1500 }) {
     : `${Math.round(value)}${suffix}`;
 
   return <strong ref={ref}>{displayValue}</strong>;
+}
+
+/* ---------------- ROUTING ---------------- */
+// Tiny History-API router: real URLs (/about, /services, ...) without a
+// routing dependency. Old in-page "#section" links still work: if the
+// section isn't on the current page they navigate to the page that has it.
+const SECTION_ROUTES = {
+  "about-us": "/about",
+  "why-us": "/about",
+  team: "/about",
+  solutions: "/services",
+  services: "/services",
+  industries: "/industries",
+  process: "/process",
+  faq: "/process",
+  results: "/insights",
+  contact: "/contact",
+};
+
+const NAVIGATE_EVENT = "fl:navigate";
+
+function normalizePath(pathname) {
+  const trimmed = pathname.replace(/\/+$/, "");
+  return trimmed === "" ? "/" : trimmed;
+}
+
+function navigate(to) {
+  const url = new URL(to, window.location.origin);
+  const path = normalizePath(url.pathname);
+  if (path === normalizePath(window.location.pathname)) {
+    const target = url.hash && document.getElementById(url.hash.slice(1));
+    if (target) {
+      target.scrollIntoView({ behavior: "smooth" });
+      window.history.replaceState(null, "", path + url.hash);
+    } else {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+    return;
+  }
+  window.history.pushState(null, "", path + url.hash);
+  window.dispatchEvent(new Event(NAVIGATE_EVENT));
+}
+
+function usePath() {
+  const [path, setPath] = useState(() => normalizePath(window.location.pathname));
+  useEffect(() => {
+    const update = () => setPath(normalizePath(window.location.pathname));
+    window.addEventListener("popstate", update);
+    window.addEventListener(NAVIGATE_EVENT, update);
+    return () => {
+      window.removeEventListener("popstate", update);
+      window.removeEventListener(NAVIGATE_EVENT, update);
+    };
+  }, []);
+  return path;
+}
+
+// Intercepts clicks on internal links so they route client-side.
+function useLinkInterception() {
+  useEffect(() => {
+    const onClick = (e) => {
+      if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+      const anchor = e.target.closest("a[href]");
+      if (!anchor || (anchor.target && anchor.target !== "_self") || anchor.hasAttribute("download")) return;
+      const raw = anchor.getAttribute("href");
+      if (/^(mailto:|tel:)/i.test(raw)) return;
+
+      let to;
+      if (raw.startsWith("#")) {
+        const id = raw.slice(1);
+        // Section is on this page: let the browser smooth-scroll to it.
+        if (!id || document.getElementById(id)) return;
+        if (!SECTION_ROUTES[id]) return;
+        to = SECTION_ROUTES[id] + raw;
+      } else {
+        const url = new URL(raw, window.location.href);
+        if (url.origin !== window.location.origin) return;
+        to = url.pathname + url.hash;
+      }
+      e.preventDefault();
+      navigate(to);
+    };
+    document.addEventListener("click", onClick);
+    return () => document.removeEventListener("click", onClick);
+  }, []);
+}
+
+/* ---------------- 3D TILT ---------------- */
+const TILT_SELECTOR = [
+  "[data-tilt]",
+  ".fl-sol-card",
+  ".fl-problem-card",
+  ".fl-industry-tile",
+  ".fl-result-card",
+  ".fl-testimonial",
+  ".fl-why-grid-card",
+  ".fl-trusted-stat",
+  ".fl-why-image",
+].join(",");
+
+// Pointer-driven perspective tilt for cards, delegated from the document
+// so every card on every page gets it without per-component wiring.
+function useTilt() {
+  useEffect(() => {
+    const canHover = window.matchMedia("(hover: hover) and (pointer: fine)").matches;
+    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (!canHover || reduced) return;
+
+    let active = null;
+    let frame = 0;
+    const reset = (el) => {
+      el.style.transition = "transform 0.6s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.3s ease, border-color 0.3s ease";
+      el.style.transform = "";
+      el.style.removeProperty("--glare-x");
+      el.style.removeProperty("--glare-y");
+      el.style.removeProperty("--tilt-x");
+      el.style.removeProperty("--tilt-y");
+      el.classList.remove("is-tilting");
+    };
+    const onMove = (e) => {
+      const el = e.target.closest?.(TILT_SELECTOR);
+      if (active && active !== el) {
+        reset(active);
+        active = null;
+      }
+      if (!el) return;
+      if (active !== el) {
+        active = el;
+        // Reveal keyframes hold their final transform; drop them so the
+        // inline tilt transform can take effect.
+        el.style.animation = "none";
+        el.classList.add("is-tilting");
+      }
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        const rect = el.getBoundingClientRect();
+        const x = (e.clientX - rect.left) / rect.width;
+        const y = (e.clientY - rect.top) / rect.height;
+        const strength = rect.width > 520 ? 4 : 8;
+        el.style.transition = "transform 0.12s ease-out, box-shadow 0.3s ease, border-color 0.3s ease";
+        el.style.transform = `perspective(1000px) rotateX(${((0.5 - y) * strength).toFixed(2)}deg) rotateY(${((x - 0.5) * strength).toFixed(2)}deg) translateY(-6px)`;
+        el.style.setProperty("--glare-x", `${(x * 100).toFixed(1)}%`);
+        el.style.setProperty("--glare-y", `${(y * 100).toFixed(1)}%`);
+        // Inner layers (photos, icons, badges) shift against the tilt for depth.
+        el.style.setProperty("--tilt-x", (x - 0.5).toFixed(3));
+        el.style.setProperty("--tilt-y", (y - 0.5).toFixed(3));
+      });
+    };
+    const onLeave = () => {
+      if (active) reset(active);
+      active = null;
+    };
+    document.addEventListener("pointermove", onMove, { passive: true });
+    document.documentElement.addEventListener("pointerleave", onLeave);
+    return () => {
+      cancelAnimationFrame(frame);
+      document.removeEventListener("pointermove", onMove);
+      document.documentElement.removeEventListener("pointerleave", onLeave);
+    };
+  }, []);
+}
+
+function ScrollProgress() {
+  const barRef = useRef(null);
+  useEffect(() => {
+    let frame = 0;
+    const update = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        const max = document.documentElement.scrollHeight - window.innerHeight;
+        const progress = max > 0 ? window.scrollY / max : 0;
+        if (barRef.current) barRef.current.style.transform = `scaleX(${progress})`;
+      });
+    };
+    update();
+    window.addEventListener("scroll", update, { passive: true });
+    window.addEventListener("resize", update);
+    return () => {
+      cancelAnimationFrame(frame);
+      window.removeEventListener("scroll", update);
+      window.removeEventListener("resize", update);
+    };
+  }, []);
+  return <div className="fl-scroll-progress" ref={barRef} aria-hidden="true" />;
 }
 
 /* ---------------- SOLAR ICONS ---------------- */
@@ -351,9 +533,10 @@ function BackToTop() {
 }
 
 /* ---------------- NAV ---------------- */
-function Nav() {
+function Nav({ path }) {
   const [open, setOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
+  const [hidden, setHidden] = useState(false);
   const [aboutOpen, setAboutOpen] = useState(false);
   const [mobileAboutOpen, setMobileAboutOpen] = useState(false);
   const aboutRef = useRef(null);
@@ -361,16 +544,23 @@ function Nav() {
     {
       label: "About",
       children: [
-        { label: "About Us", href: "#about-us" },
-        { label: "Why Choose Us", href: "#why-us" },
-        { label: "Team", href: "#team" },
+        { label: "About Us", href: "/about" },
+        { label: "Why Choose Us", href: "/about#why-us" },
+        { label: "Our Team", href: "/about#team" },
       ],
     },
-    { label: "Services", href: "#services" },
-    { label: "Industries", href: "#industries" },
-    { label: "Process", href: "#process" },
-    { label: "Insight", href: "#results" },
+    { label: "Services", href: "/services" },
+    { label: "Industries", href: "/industries" },
+    { label: "Process", href: "/process" },
+    { label: "Insights", href: "/insights" },
   ];
+  const isActive = (href) => path === href.split("#")[0];
+
+  useEffect(() => {
+    setOpen(false);
+    setAboutOpen(false);
+    setMobileAboutOpen(false);
+  }, [path]);
 
   useEffect(() => {
     if (!aboutOpen) return;
@@ -391,8 +581,15 @@ function Nav() {
   }, [aboutOpen]);
 
   useEffect(() => {
+    let lastY = window.scrollY;
     const updateNav = () => {
-      setScrolled(window.scrollY > 24);
+      const y = window.scrollY;
+      setScrolled(y > 24);
+      // Slide away while reading downward, return on any scroll up.
+      if (Math.abs(y - lastY) > 6) {
+        setHidden(y > lastY && y > 320);
+        lastY = y;
+      }
     };
 
     updateNav();
@@ -400,18 +597,13 @@ function Nav() {
     return () => window.removeEventListener("scroll", updateNav);
   }, []);
 
+  const navHidden = hidden && !open && !aboutOpen;
+
   return (
-    <header className={`fl-nav ${scrolled ? "is-scrolled" : ""}`}>
+    <header className={`fl-nav ${scrolled ? "is-scrolled" : ""} ${navHidden ? "is-hidden" : ""}`}>
 
       <div className="fl-container fl-nav-inner">
-        <a
-          href="/"
-          className="fl-logo"
-          onClick={(e) => {
-            e.preventDefault();
-            window.location.href = "/";
-          }}
-        >
+        <a href="/" className="fl-logo" aria-label="Forth Ledger home">
           <img src={logoMark} alt="Forth Ledger" className="fl-logo-image" />
         </a>
         <nav className="fl-nav-links">
@@ -424,7 +616,7 @@ function Nav() {
               >
                 <button
                   type="button"
-                  className="fl-nav-dropdown-trigger"
+                  className={`fl-nav-dropdown-trigger ${link.children.some((c) => isActive(c.href)) ? "is-active" : ""}`}
                   aria-expanded={aboutOpen}
                   aria-haspopup="true"
                   onClick={() => setAboutOpen((v) => !v)}
@@ -458,13 +650,18 @@ function Nav() {
                 </div>
               </div>
             ) : (
-              <a key={link.href} href={link.href}>
+              <a
+                key={link.href}
+                href={link.href}
+                className={isActive(link.href) ? "is-active" : ""}
+                aria-current={isActive(link.href) ? "page" : undefined}
+              >
                 {link.label}
               </a>
             ),
           )}
         </nav>
-        <a href="#contact" className="fl-btn fl-btn-primary fl-nav-cta">
+        <a href="/contact" className="fl-btn fl-btn-primary fl-nav-cta">
           Contact Us
         </a>
         <button
@@ -520,13 +717,18 @@ function Nav() {
               </div>
             </div>
           ) : (
-            <a key={link.href} href={link.href} onClick={() => setOpen(false)}>
+            <a
+              key={link.href}
+              href={link.href}
+              className={isActive(link.href) ? "is-active" : ""}
+              onClick={() => setOpen(false)}
+            >
               {link.label}
             </a>
           ),
         )}
         <a
-          href="#contact"
+          href="/contact"
           onClick={() => setOpen(false)}
           style={{ color: "#a9a2ff", fontWeight: 600 }}
         >
@@ -537,18 +739,43 @@ function Nav() {
   );
 }
 
+// Splits a line into words that rise from behind a mask, one after another.
+function MaskedWords({ text, startIndex = 0 }) {
+  // The space sits outside each inline-block so it isn't collapsed.
+  return text.split(" ").map((word, i) => (
+    <React.Fragment key={`${word}-${i}`}>
+      {i > 0 && " "}
+      <span className="fl-word">
+        <span style={{ "--i": startIndex + i }}>{word}</span>
+      </span>
+    </React.Fragment>
+  ));
+}
+
 function Hero() {
+  const ref = useRef(null);
+  // Background photo drifts slightly against the pointer for depth.
+  const onPointerMove = (e) => {
+    const el = ref.current;
+    if (!el || e.pointerType !== "mouse") return;
+    const rect = el.getBoundingClientRect();
+    el.style.setProperty("--hx", ((e.clientX - rect.left) / rect.width - 0.5).toFixed(3));
+    el.style.setProperty("--hy", ((e.clientY - rect.top) / rect.height - 0.5).toFixed(3));
+  };
+  const clients = ["Fusemachines", "Accountants4SME", "Himalayan PTE Limited"];
   return (
-    <section className="fl-hero" id="top">
+    <section className="fl-hero" id="top" ref={ref} onPointerMove={onPointerMove}>
       <div className="fl-container fl-hero-shell">
         <div className="fl-hero-watermark" aria-hidden="true">
           DISCOVER
         </div>
         <div className="fl-hero-inner">
-          <h1>
-            Precision Beyond
-            <br />
-            Borders
+          <h1 aria-label="Precision Beyond Borders">
+            <span aria-hidden="true">
+              <MaskedWords text="Precision Beyond" />
+              <br />
+              <MaskedWords text="Borders" startIndex={2} />
+            </span>
           </h1>
           <p className="lede">
             High-growth accounting outsourcing and financial management for
@@ -562,7 +789,18 @@ function Hero() {
               Explore capabilities
             </a>
           </div>
+          <div className="fl-hero-trust">
+            <span className="fl-hero-trust-label">Trusted by</span>
+            <ul>
+              {clients.map((c) => (
+                <li key={c}>{c}</li>
+              ))}
+            </ul>
+          </div>
         </div>
+        <a href="#solve" className="fl-scroll-cue" aria-label="Scroll to content">
+          <span />
+        </a>
       </div>
     </section>
   );
@@ -593,7 +831,6 @@ function WhatWeSolve() {
         <div className="fl-solve-grid">
           <Reveal>
             <div className="fl-solve-left">
-              <div className="fl-eyebrow fl-eyebrow--center">What we solve</div>
               <div className="fl-problem-list">
                 {problems.map((p) => (
                   <div className="fl-problem-card" key={p.title}>
@@ -611,6 +848,7 @@ function WhatWeSolve() {
           </Reveal>
           <Reveal>
             <div className="fl-solve-panel">
+              <div className="fl-eyebrow">What we solve</div>
               <h2 className="fl-h2">
                 More control, enhanced capacity,{" "}
                 <span className="accent">less operational drag</span>.
@@ -666,30 +904,17 @@ function TrustedPerformance() {
         <Reveal>
           <div className="fl-trusted-body">
             <p>
-              Forth Ledger was founded by two Chartered Accountants who
-              believe offshore accounting should mean more than cost
-              savings. It should mean precision you don't have to
-              double-check.
+              Founded by two Chartered Accountants, Forth Ledger delivers
+              offshore accounting built on precision, not just cost
+              savings. We support CPA firms and growing businesses with
+              bookkeeping, financial reporting, payroll, reconciliations,
+              and month-end close.
             </p>
             <p>
-              We help CPA firms, accounting practices, and growing
-              businesses strengthen their financial operations through
-              dependable offshore support, including bookkeeping,
-              financial reporting, payroll, reconciliations, and
-              month-end close, delivered with the accuracy of a firm
-              that's been in the room where the numbers actually matter.
-            </p>
-            <p>
-              Our team works as a seamless extension of yours. By
-              combining qualified professionals, cloud-based technology,
-              and standardized processes, we help you increase capacity,
-              reduce operational costs, and stay focused on what matters
-              most, serving your clients and growing your practice.
-            </p>
-            <p>
-              Built on Accuracy, Reliability, and Partnership, Forth
-              Ledger is committed to secure, scalable, and dependable
-              accounting support that goes beyond outsourcing.
+              Working as a seamless extension of your team, we combine
+              qualified professionals, cloud technology, and standardized
+              processes to expand your capacity and reduce costs, so you
+              can focus on serving clients and growing your practice.
             </p>
           </div>
           <p className="fl-trusted-tagline">
@@ -712,6 +937,83 @@ function TrustedPerformance() {
 }
 
 /* ---------------- SOLUTIONS ---------------- */
+/* Animated illustrations for the technology solution cards. */
+function CodeVisual() {
+  return (
+    <div className="fl-tech-visual fl-tech-visual--code" aria-hidden="true">
+      <div className="fl-code-window">
+        <div className="fl-code-bar">
+          <i /><i /><i />
+          <span>ledger-portal.tsx</span>
+        </div>
+        <div className="fl-code-lines">
+          <span style={{ "--w": "62%", "--c": "#c4b5fd", "--d": 0 }} />
+          <span style={{ "--w": "78%", "--c": "#93c5fd", "--d": 1, "--x": 1 }} />
+          <span style={{ "--w": "54%", "--c": "#86efac", "--d": 2, "--x": 2 }} />
+          <span style={{ "--w": "70%", "--c": "#93c5fd", "--d": 3, "--x": 2 }} />
+          <span style={{ "--w": "40%", "--c": "#fcd34d", "--d": 4, "--x": 1 }} />
+          <span style={{ "--w": "30%", "--c": "#c4b5fd", "--d": 5 }} />
+        </div>
+      </div>
+      <div className="fl-tech-chip fl-tech-chip--ok">
+        <SolarIcon name="check" size={14} strokeWidth={2.4} /> Deployed
+      </div>
+    </div>
+  );
+}
+
+function AutomationVisual() {
+  const nodes = [
+    { label: "Invoice", icon: "receipt" },
+    { label: "AI", icon: "bolt", hub: true },
+    { label: "Ledger", icon: "book" },
+  ];
+  return (
+    <div className="fl-tech-visual fl-tech-visual--flow" aria-hidden="true">
+      <svg className="fl-flow-lines" viewBox="0 0 300 120" preserveAspectRatio="none">
+        <path d="M60 60 H130" />
+        <path d="M170 60 H240" />
+        <path className="fl-flow-pulse" d="M60 60 H130" />
+        <path className="fl-flow-pulse fl-flow-pulse--late" d="M170 60 H240" />
+      </svg>
+      <div className="fl-flow-nodes">
+        {nodes.map((n) => (
+          <div className={`fl-flow-node ${n.hub ? "is-hub" : ""}`} key={n.label}>
+            <span className="fl-flow-icon">
+              <SolarIcon name={n.icon} size={n.hub ? 24 : 20} />
+            </span>
+            <small>{n.label}</small>
+          </div>
+        ))}
+      </div>
+      <div className="fl-tech-chip">
+        <SolarIcon name="clock" size={14} /> 40 hrs saved / month
+      </div>
+    </div>
+  );
+}
+
+function ChatVisual() {
+  return (
+    <div className="fl-tech-visual fl-tech-visual--chat" aria-hidden="true">
+      <div className="fl-chat">
+        <div className="fl-chat-msg fl-chat-msg--user" style={{ "--d": 0 }}>
+          Can you send my March P&amp;L?
+        </div>
+        <div className="fl-chat-msg fl-chat-msg--bot" style={{ "--d": 1 }}>
+          <span className="fl-chat-avatar">
+            <SolarIcon name="bolt" size={12} strokeWidth={2.2} />
+          </span>
+          Done. I&apos;ve emailed it and flagged 2 open items.
+        </div>
+        <div className="fl-chat-typing" style={{ "--d": 2 }}>
+          <i /><i /><i />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function Solutions() {
   const items = [
     {
@@ -744,6 +1046,24 @@ function Solutions() {
       body: "End-to-end preparation and documentation so audits close faster, with fewer surprises.",
       image: auditSupportImg,
     },
+    {
+      title: "Software Development",
+      body: "Custom web platforms, client portals and finance tools, built end to end and integrated with the systems you already use.",
+      visual: <CodeVisual />,
+      tag: "Technology",
+    },
+    {
+      title: "AI Automation for Business",
+      body: "Automate invoice capture, reconciliations, reporting and repetitive workflows with AI, so your team focuses on decisions, not data entry.",
+      visual: <AutomationVisual />,
+      tag: "AI",
+    },
+    {
+      title: "Agentic Chatbot Systems",
+      body: "AI agents that answer client questions, qualify leads and take action across your tools around the clock, with human hand-off built in.",
+      visual: <ChatVisual />,
+      tag: "AI",
+    },
   ];
   return (
     <section className="fl-section" id="solutions">
@@ -760,9 +1080,10 @@ function Solutions() {
         <Reveal>
           <div className="fl-sol-grid">
             {items.map((it) => (
-              <div className="fl-sol-card" key={it.title}>
+              <div className={`fl-sol-card ${it.visual ? "fl-sol-card--tech" : ""}`} key={it.title}>
                 <div className="fl-sol-image">
-                  <img src={it.image} alt={it.title} />
+                  {it.visual || <img src={it.image} alt={it.title} />}
+                  {it.tag && <span className="fl-sol-tag">{it.tag}</span>}
                 </div>
                 <h3>{it.title}</h3>
                 <p>{it.body}</p>
@@ -1008,37 +1329,37 @@ function WhyUs() {
     {
       icon: "briefcase",
       title: "Led by Chartered Accountants",
-      body: "Forth Ledger is founded and led by qualified Chartered Accountants, not operations managers running an outsourcing desk. That means every engagement is shaped by people who understand what accuracy actually requires.",
+      body: "Every engagement is shaped by qualified CAs who know what real accuracy requires.",
     },
     {
       icon: "users",
       title: "A Seamless Extension of Your Team",
-      body: "We integrate with your workflows, software, and communication style to deliver a consistent experience for you, and for everyone you answer to.",
+      body: "We adapt to your workflows, software, and communication style from day one.",
     },
     {
       icon: "checklist",
-      title: "Qualified Professionals, Reviewed Work",
-      body: "Every engagement runs through a structured review process before it reaches you, ensuring accuracy, consistency, and compliance at every step.",
+      title: "Reviewed Before It Reaches You",
+      body: "A structured multi-level review ensures accuracy, consistency, and compliance.",
     },
     {
       icon: "wallet",
-      title: "One Partner, Full-Spectrum Support",
-      body: "From day-to-day bookkeeping to CFO-level reporting, our support scales with you, so there's no need to bring in a different provider as your needs grow.",
+      title: "Full-Spectrum Support",
+      body: "From bookkeeping to CFO-level reporting, one partner that scales with you.",
     },
     {
       icon: "bolt",
       title: "Technology-Driven Efficiency",
-      body: "Leading cloud accounting platforms and standardized processes streamline routine work, improve collaboration, and keep your financial information timely.",
+      body: "Cloud platforms and standardized processes keep your financials timely.",
     },
     {
       icon: "shield",
       title: "Security You Can Trust",
-      body: "Your data is handled with strict confidentiality and secure workflows, backed by professional standards our founders hold as practicing Chartered Accountants, standards that exist independently of any contract.",
+      body: "Strict confidentiality and secure workflows, held to CA professional standards.",
     },
     {
       icon: "trendUp",
       title: "Results That Matter",
-      body: "Less operational burden, more capacity, and accounting support you can rely on as you grow.",
+      body: "Less operational burden, more capacity, and support you can rely on.",
     },
   ];
   const primaryItems = items.slice(0, 3);
@@ -1055,10 +1376,8 @@ function WhyUs() {
               <span className="accent">Reliable Accounting Partner</span>
             </h2>
             <p className="fl-sub fl-sub--center">
-              At Forth Ledger, we don't measure great accounting by
-              transactions processed. We measure it by the confidence our
-              clients have in their financial information, and the trust
-              they place in our team.
+              We measure great accounting not by transactions processed,
+              but by the confidence our clients have in their numbers.
             </p>
           </div>
         </Reveal>
@@ -1079,7 +1398,20 @@ function WhyUs() {
             </div>
           </Reveal>
           <Reveal>
-            <div className="fl-why-image" aria-hidden="true" />
+            <div className="fl-why-image" aria-hidden="true">
+              <div className="fl-why-badge fl-why-badge--top">
+                <span className="fl-why-badge-icon">
+                  <SolarIcon name="checklist" />
+                </span>
+                Multi-level review
+              </div>
+              <div className="fl-why-badge fl-why-badge--bottom">
+                <span className="fl-why-badge-icon">
+                  <SolarIcon name="shield" />
+                </span>
+                CA-led &amp; secure
+              </div>
+            </div>
           </Reveal>
           <Reveal>
             <div className="fl-why-grid">
@@ -1099,9 +1431,7 @@ function WhyUs() {
         </div>
         <Reveal>
           <p className="fl-why-tagline">
-            With Forth Ledger, you're not outsourcing your accounting.
-            You're strengthening it, with a partner invested in getting it
-            right.
+            You're not outsourcing your accounting. You're strengthening it.
           </p>
         </Reveal>
       </div>
@@ -1260,7 +1590,7 @@ function TechStack() {
       name: "Power BI",
       mark: (
         <span className="fl-tool-mark fl-tool-mark--flat">
-          <svg width="26" height="26" viewBox="0 0 24 24" fill="none">
+          <svg width="36" height="36" viewBox="0 0 24 24" fill="none">
             <rect x="3" y="12" width="4.5" height="9" rx="1" fill="#F2C811" />
             <rect x="9.75" y="7" width="4.5" height="14" rx="1" fill="#F2C811" />
             <rect x="16.5" y="3" width="4.5" height="18" rx="1" fill="#F2C811" />
@@ -1304,30 +1634,29 @@ function TechStack() {
 
 /* ---------------- RESULTS + TESTIMONIALS ---------------- */
 function Results() {
-  const testimonials = [
+  const clients = [
     {
-      quote:
-        "Forth Ledger didn\u2019t just solve our immediate issues; they built a foundation for our next five years of growth. From the first month, they took the time to understand how our business actually operates instead of forcing us into a generic template, and that groundwork is still paying off today.",
-      name: "Marcus Thorne",
-      role: "COO, TechStream Global",
+      name: "Fusemachines",
+      initials: "FM",
+      location: "New York, United States",
+      about:
+        "A New York\u2013based AI and technology company. We support them remotely with financial consulting.",
+      service: "Financial Consulting",
     },
     {
-      quote:
-        "The caliber of talent they integrated into our team was world-class. Our efficiency increased by 45% within 3 months, and just as importantly, our internal team finally had the bandwidth to focus on strategy instead of chasing reconciliations every week.",
-      name: "Elena Rodriguez",
-      role: "COO, BuildScale Inc.",
+      name: "Accountants4SME",
+      initials: "A4",
+      location: "Portlaoise, County Laois, Ireland",
+      about:
+        "N-Tax Advisory, an Irish firm of certified tax advisors and accountants serving SMEs across Ireland. We lead their practice remotely.",
+      service: "Practice Lead",
     },
     {
-      quote:
-        "Their financial visibility tools changed how we think about capital. We finally have data we can trust for big moves, with dashboards that update in real time instead of reports that were already stale by the time we saw them.",
-      name: "David Chen",
-      role: "CFO, EduFrontier",
-    },
-    {
-      quote:
-        "Month-end close went from two weeks to three days. The reporting alone paid for the engagement within the first quarter, and the team caught two reconciliation issues our previous bookkeeper had missed for months.",
-      name: "Priya Nair",
-      role: "VP of Finance, Northwind Logistics",
+      name: "Himalayan PTE Limited",
+      initials: "HP",
+      location: "Singapore",
+      about: "A Singapore-based company supported by our offshore accounting team.",
+      service: "Offshore Accounting",
     },
   ];
   return (
@@ -1364,29 +1693,20 @@ function Results() {
         </Reveal>
         <Reveal>
           <h3 className="fl-h2 fl-h2--center fl-testimonial-heading">
-            Trusted By The World&rsquo;s Best
+            Clients Who Trust Us
           </h3>
-          <div className="fl-testimonial-grid">
-            {testimonials.map((t) => (
-              <div className="fl-testimonial" key={t.name}>
+          <div className="fl-testimonial-grid fl-testimonial-grid--clients">
+            {clients.map((c) => (
+              <div className="fl-testimonial" key={c.name}>
                 <div className="fl-testimonial-person">
-                  <div className="fl-avatar">
-                    {t.name
-                      .split(" ")
-                      .map((n) => n[0])
-                      .join("")}
-                  </div>
+                  <div className="fl-avatar">{c.initials}</div>
                   <div>
-                    <b>{t.name}</b>
-                    <span>{t.role}</span>
+                    <b>{c.name}</b>
+                    <span>{c.location}</span>
                   </div>
                 </div>
-                <div className="fl-testimonial-stars" aria-label="5 out of 5 stars">
-                  {Array.from({ length: 5 }).map((_, i) => (
-                    <SolarIcon key={i} name="star" size={16} />
-                  ))}
-                </div>
-                <p className="quote">&ldquo;{t.quote}&rdquo;</p>
+                <span className="fl-client-service">{c.service}</span>
+                <p className="quote">{c.about}</p>
               </div>
             ))}
           </div>
@@ -1568,7 +1888,7 @@ function CtaBand() {
     setStatus("submitting");
 
     try {
-      const res = await fetch("/api/consult.php", {
+      const res = await fetch("/api/consult", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
@@ -1729,6 +2049,15 @@ function Team() {
       title: "Leadership Team",
       members: [
         {
+          name: "CA Basanta Lama",
+          role: "Strategic Advisor, Offshore Accounting",
+          specialization: "Offshore Accounting • Process Excellence • Quality Assurance",
+          bio:
+            "Provides strategic guidance on offshore accounting operations, bookkeeping processes, quality assurance, and international best practices.",
+          image: basantaImg,
+          linkedin: "https://www.linkedin.com/in/basanta-lama-121855147/",
+        },
+        {
           name: "CA Amrit Chapagain",
           role: "Co-Founder & Managing Director",
           specialization:
@@ -1752,40 +2081,61 @@ function Team() {
       ],
     },
     {
-      title: "Strategic Advisor",
+      title: "Our Senior Consultants",
       members: [
         {
-          name: "CA Basanta Lama",
-          role: "Strategic Advisor, Offshore Accounting",
-          specialization: "Offshore Accounting • Process Excellence • Quality Assurance",
-          bio:
-            "Provides strategic guidance on offshore accounting operations, bookkeeping processes, quality assurance, and international best practices.",
-          image: basantaImg,
+          name: "Aishwarya Shrestha (ACA, FCCA)",
+          role: "Senior Consultant",
+          experience: "8+ years in accounting & finance",
+          specialization: "Accounting • Finance • Reporting • Compliance",
+          bio: "Brings over eight years of accounting and finance experience to client engagements, guiding reporting, compliance, and advisory work with technical precision.",
+          image: aishwaryaImg,
+          linkedin: "https://www.linkedin.com/in/aishashrestha8/",
+        },
+      ],
+    },
+    {
+      title: "Our IT Team",
+      members: [
+        {
+          name: "Saroj Timsina (ACCA)",
+          role: "FinTech Specialist",
+          experience: "5 years in accounting & finance automation",
+          specialization: "Accounting • Finance Automation • FinTech",
+          bio: "Combines accounting expertise with technology, automating finance workflows and building the systems behind our accounting delivery.",
+          image: sarojImg,
+          linkedin: "https://www.linkedin.com/in/saroj-timsina/",
+        },
+        {
+          name: "Apil Thapa",
+          role: "Full Stack AI Developer",
+          experience: "3+ years in software development",
+          specialization: "AI • NLP • LLM • Deep Learning",
+          bio: "Builds our web platforms and AI-powered tools end to end, applying NLP, large language models, and deep learning to automate accounting work.",
+          image: apilImg,
+          linkedin: "https://www.linkedin.com/in/apil-thapa-3114a3255/",
         },
       ],
     },
     {
       title: "Management Team",
+      compact: true,
       members: [
-        { name: "Utsab Bhandari", role: "Head of Operations", bio: "Oversees workflow management, resource planning, service delivery, and operational excellence.", image: utsabImg },
-        { name: "Samir Sapkota", role: "Head of Tax & Compliance", bio: "Leads tax support, compliance services, and technical advisory to ensure regulatory accuracy.", image: samirImg },
-        { name: "Anamol Sitaula", role: "Data & Automation Engineer", bio: "Develops workflow automation, reporting dashboards, and data-driven accounting solutions that improve operational efficiency.", image: anamolImg },
-      ],
-    },
-    {
-      title: "Accounting Team",
-      members: [
-        { name: "Prashant Joshi", role: "Senior Accountant", bio: "Supports financial reporting, reconciliations, month-end close, and accounting review processes.", image: prashantImg },
-        { name: "Diwas Bhandari", role: "Senior Bookkeeping Associate", bio: "Delivers day-to-day bookkeeping, reconciliations, accounts payable/receivable support, and financial record maintenance.", image: diwasImg },
-      ],
-    },
-    {
-      title: "Bookkeeping Associates",
-      hidden: true,
-      members: [
-        { name: "Bookkeeping Associate", role: "", bio: "Provides accurate transaction recording, bank reconciliations, account maintenance, and routine accounting support while following standardized quality control procedures." },
-        { name: "Bookkeeping Associate", role: "", bio: "Provides accurate transaction recording, bank reconciliations, account maintenance, and routine accounting support while following standardized quality control procedures." },
-        { name: "Bookkeeping Associate", role: "", bio: "Provides accurate transaction recording, bank reconciliations, account maintenance, and routine accounting support while following standardized quality control procedures." },
+        {
+          name: "Samir Sapkota",
+          role: "Head of Tax & Compliance",
+          bio: "Oversees tax filings and regulatory compliance, keeping every client accurate, current, and audit-ready.",
+        },
+        {
+          name: "Prashant Joshi",
+          role: "Senior Accountant",
+          bio: "Manages month-end close, reconciliations, and financial reporting with a focus on accuracy and timeliness.",
+        },
+        {
+          name: "Diwas Bhandari",
+          role: "Senior Bookkeeping Associate",
+          bio: "Maintains clean, up-to-date books, handling day-to-day transactions, payables, and receivables.",
+        },
       ],
     },
   ];
@@ -1796,90 +2146,68 @@ function Team() {
         <Reveal>
           <div className="meet-team-header" style={{ textAlign: "center" }}>
             <div className="fl-eyebrow fl-eyebrow--center">Meet the Team Behind Forth Ledger</div>
-            <h2 className="fl-h2 fl-h2--center">Our team brings together chartered accountants, accounting professionals, tax specialists, operations experts, and technology professionals committed to delivering reliable, accurate, and scalable offshore accounting solutions. One Team. One Standard. One Commitment to Excellence.</h2>
           </div>
         </Reveal>
 
-        {departments.filter((dept) => !dept.hidden).map((dept) => {
-          const isFeatured = dept.title === "Leadership Team" || dept.members.length === 1;
-          return (
-            <Reveal key={dept.title}>
-              <div className="team-dept">
-                <h3 className="team-dept-title">{dept.title}</h3>
-                {isFeatured ? (
-                  <div className="team-feature-list">
-                    {dept.members.map((m) => (
-                      <div className="team-feature-row" key={m.name} tabIndex={0}>
-                        <div className="team-feature-photo" aria-hidden="true">
-                          {m.image ? (
-                            <img src={m.image} alt={m.name} />
-                          ) : (
-                            <span className="team-initials-big">
-                              {m.name.split(" ").slice(0,2).map(n=>n[0]).join("")}
-                            </span>
-                          )}
-                        </div>
-                        <div className="team-feature-content">
-                          <h4>{m.name}</h4>
-                          {m.role && <small className="team-role">{m.role}</small>}
-                          {m.specialization && <div className="team-special">{m.specialization}</div>}
-                          <p className="team-bio">{m.bio}</p>
-                          {dept.title === "Leadership Team" && (
-                            <div className="team-social-links">
-                              <a
-                                href={m.email ? `mailto:${m.email}` : "#"}
-                                className="team-social-icon"
-                                aria-label={`Email ${m.name}`}
-                              >
-                                <SolarIcon name="mail" size={18} />
-                              </a>
-                              <a
-                                href={m.linkedin || "#"}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="team-social-icon"
-                                aria-label={`${m.name} on LinkedIn`}
-                              >
-                                <SolarIcon name="linkedin" size={18} />
-                              </a>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    ))}
+        {departments.filter((dept) => !dept.hidden).map((dept) => (
+          <Reveal key={dept.title}>
+            <div className="team-dept">
+              <h3 className="team-dept-title">{dept.title}</h3>
+              <div className="team-grid">
+                {dept.compact && dept.members.map((m) => (
+                  <div className="team-card team-card--compact" key={m.name} tabIndex={0}>
+                    <h4>{m.name}</h4>
+                    <span className="team-card-role">{m.role}</span>
+                    <p className="team-bio">{m.bio}</p>
                   </div>
-                ) : (
-                  <div className="team-grid">
-                    {dept.members.map((m, idx) => (
-                      <div className="team-card" key={`${m.name}-${idx}`} tabIndex={0}>
-                        <div className="team-photo" aria-hidden="true">
-                          {m.image ? (
-                            <img src={m.image} alt={m.name} className="team-photo-img" />
-                          ) : (
-                            <span className="team-initials">{m.name.split(" ").slice(0,2).map(n=>n[0]).join("")}</span>
+                ))}
+                {!dept.compact && dept.members.map((m, idx) => (
+                  <div className="team-card" key={`${m.name}-${idx}`} tabIndex={0}>
+                    <div className="team-photo" aria-hidden="true">
+                      {m.image ? (
+                        <img src={m.image} alt={m.name} className="team-photo-img" />
+                      ) : (
+                        <span className="team-initials">{m.name.split(" ").slice(0,2).map(n=>n[0]).join("")}</span>
+                      )}
+                    </div>
+                    <div className="team-info">
+                      <h4>{m.name}</h4>
+                      {m.role && <span className="team-card-role">{m.role}</span>}
+                      {m.experience && <div className="team-card-exp">{m.experience}</div>}
+                      {m.specialization && <div className="team-special">{m.specialization}</div>}
+                      <p className="team-bio">{m.bio}</p>
+                      {(m.linkedin || m.email) && (
+                        <div className="team-card-actions">
+                          {m.linkedin && (
+                            <a
+                              href={m.linkedin}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="team-card-link"
+                              aria-label={`${m.name} on LinkedIn`}
+                            >
+                              <SolarIcon name="linkedin" size={17} />
+                              LinkedIn
+                            </a>
+                          )}
+                          {m.email && (
+                            <a
+                              href={`mailto:${m.email}`}
+                              className="team-card-link team-card-link--icon"
+                              aria-label={`Email ${m.name}`}
+                            >
+                              <SolarIcon name="mail" size={17} />
+                            </a>
                           )}
                         </div>
-                        <div className="team-info">
-                          <h4>{m.name}</h4>
-                          {m.role && <small className="team-role">{m.role}</small>}
-                          {m.specialization && <div className="team-special">{m.specialization}</div>}
-                          <p className="team-bio">{m.bio}</p>
-                        </div>
-                      </div>
-                    ))}
+                      )}
+                    </div>
                   </div>
-                )}
+                ))}
               </div>
-            </Reveal>
-          );
-        })}
-
-        <Reveal>
-          <div className="team-commitment">
-            <h3>Our Commitment</h3>
-            <p>Every engagement at Forth Ledger follows a structured workflow supported by qualified professionals, standardized review procedures, secure technology, and transparent communication. We don't just provide accounting services. We become a trusted extension of your team, committed to helping your business grow with confidence.</p>
-          </div>
-        </Reveal>
+            </div>
+          </Reveal>
+        ))}
       </div>
     </section>
   );
@@ -1940,28 +2268,28 @@ function Footer() {
             <h5>Services</h5>
             <ul>
               <li>
-                <a href="#services">Bookkeeping &amp; Accounting</a>
+                <a href="/services">Bookkeeping &amp; Accounting</a>
               </li>
               <li>
-                <a href="#services">Financial Reporting</a>
+                <a href="/services">Financial Reporting</a>
               </li>
               <li>
-                <a href="#services">Accounts Payable &amp; Receivable</a>
+                <a href="/services">Accounts Payable &amp; Receivable</a>
               </li>
               <li>
-                <a href="#services">Payroll Support</a>
+                <a href="/services">Payroll Support</a>
               </li>
               <li>
-                <a href="#services">Cloud Accounting Solutions</a>
+                <a href="/services">Cloud Accounting Solutions</a>
               </li>
               <li>
-                <a href="#services">CFO &amp; Advisory Support</a>
+                <a href="/services">CFO &amp; Advisory Support</a>
               </li>
               <li>
-                <a href="#services">CPA Firm Support</a>
+                <a href="/services">CPA Firm Support</a>
               </li>
               <li>
-                <a href="#services">Audit Support</a>
+                <a href="/services">Audit Support</a>
               </li>
             </ul>
           </div>
@@ -1969,16 +2297,16 @@ function Footer() {
             <h5>Industries</h5>
             <ul>
               <li>
-                <a href="#industries">Accounting &amp; CPA</a>
+                <a href="/industries">Accounting &amp; CPA</a>
               </li>
               <li>
-                <a href="#industries">Construction</a>
+                <a href="/industries">Construction</a>
               </li>
               <li>
-                <a href="#industries">Education</a>
+                <a href="/industries">Education</a>
               </li>
               <li>
-                <a href="#industries">Technology</a>
+                <a href="/industries">Technology</a>
               </li>
             </ul>
           </div>
@@ -1986,13 +2314,19 @@ function Footer() {
             <h5>Company</h5>
             <ul>
               <li>
-                <a href="#about-us">About Us</a>
+                <a href="/about">About Us</a>
               </li>
               <li>
-                <a href="#results">Insights</a>
+                <a href="/about#team">Our Team</a>
               </li>
               <li>
-                <a href="#contact">Contact</a>
+                <a href="/process">Our Process</a>
+              </li>
+              <li>
+                <a href="/insights">Insights</a>
+              </li>
+              <li>
+                <a href="/contact">Contact</a>
               </li>
             </ul>
           </div>
@@ -2009,24 +2343,315 @@ function Footer() {
   );
 }
 
-/* ---------------- APP ---------------- */
-export default function App() {
+/* ---------------- PAGE HERO (inner pages) ---------------- */
+// Floating isometric "ledger" of glass panels. Tilts toward the pointer
+// via --px/--py set by PageHero.
+function Ledger3D({ icon, stat, statLabel }) {
   return (
-    <div className="fl-root">
-      <Nav />
+    <div className="fl-3d-scene" aria-hidden="true">
+      <div className="fl-3d-stack">
+        <div className="fl-3d-panel fl-3d-panel--base">
+          <div className="fl-3d-lines">
+            <span /><span /><span /><span />
+          </div>
+        </div>
+        <div className="fl-3d-panel fl-3d-panel--mid">
+          <div className="fl-3d-bars">
+            <span style={{ "--h": "42%" }} />
+            <span style={{ "--h": "64%" }} />
+            <span style={{ "--h": "51%" }} />
+            <span style={{ "--h": "82%" }} />
+            <span style={{ "--h": "70%" }} />
+            <span style={{ "--h": "96%" }} />
+          </div>
+        </div>
+        <div className="fl-3d-panel fl-3d-panel--top">
+          <div className="fl-3d-badge">
+            <SolarIcon name={icon} size={30} strokeWidth={1.7} />
+          </div>
+          <div className="fl-3d-stat">
+            <b>{stat}</b>
+            <span>{statLabel}</span>
+          </div>
+        </div>
+      </div>
+      <div className="fl-3d-shadow" />
+    </div>
+  );
+}
+
+function PageHero({ crumb, eyebrow, title, accent, lede, icon, stat, statLabel }) {
+  const ref = useRef(null);
+  const onPointerMove = (e) => {
+    const el = ref.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    el.style.setProperty("--px", ((e.clientX - rect.left) / rect.width - 0.5).toFixed(3));
+    el.style.setProperty("--py", ((e.clientY - rect.top) / rect.height - 0.5).toFixed(3));
+  };
+  return (
+    <section className="fl-page-hero" ref={ref} onPointerMove={onPointerMove}>
+      <div className="fl-page-hero-bg" aria-hidden="true">
+        <span className="fl-orb fl-orb--1" />
+        <span className="fl-orb fl-orb--2" />
+        <span className="fl-orb fl-orb--3" />
+        <div className="fl-page-hero-floor" />
+      </div>
+      <div className="fl-container fl-page-hero-inner">
+        <div className="fl-page-hero-copy">
+          <nav className="fl-crumbs" aria-label="Breadcrumb">
+            <a href="/">Home</a>
+            <span aria-hidden="true">/</span>
+            <span aria-current="page">{crumb}</span>
+          </nav>
+          <div className="fl-page-hero-eyebrow">{eyebrow}</div>
+          <h1>
+            {title} <span className="fl-grad-text">{accent}</span>
+          </h1>
+          <p>{lede}</p>
+          <div className="fl-page-hero-ctas">
+            <a href="/contact" className="fl-btn fl-btn-primary">
+              Book a Consultation <span aria-hidden="true">↗</span>
+            </a>
+            <a href="#page-content" className="fl-btn fl-btn-outline-onnavy">
+              Explore <SolarIcon name="arrowRight" size={15} />
+            </a>
+          </div>
+        </div>
+        <Ledger3D icon={icon} stat={stat} statLabel={statLabel} />
+      </div>
+    </section>
+  );
+}
+
+/* ---------------- PAGE CTA ---------------- */
+function PageCta() {
+  return (
+    <section className="fl-page-cta">
+      <div className="fl-container">
+        <Reveal>
+          <div className="fl-page-cta-card" data-tilt>
+            <div className="fl-page-cta-copy">
+              <div className="fl-page-cta-eyebrow">Let&apos;s talk</div>
+              <h2>
+                Ready to build your <span className="fl-grad-text">offshore finance team</span>?
+              </h2>
+              <p>
+                Tell us where your books stand today. We&rsquo;ll design a delivery
+                model, team and SLA tailored to your firm.
+              </p>
+            </div>
+            <div className="fl-page-cta-actions">
+              <a href="/contact" className="fl-btn fl-btn-primary">
+                Book a Consultation <span aria-hidden="true">↗</span>
+              </a>
+              <a href="mailto:connect@forthledger.com" className="fl-btn fl-btn-outline-onnavy">
+                connect@forthledger.com
+              </a>
+            </div>
+          </div>
+        </Reveal>
+      </div>
+    </section>
+  );
+}
+
+/* ---------------- PAGES ---------------- */
+function HomePage() {
+  return (
+    <>
       <Hero />
       <WhatWeSolve />
       <TrustedPerformance />
-      <WhyUs />
-      <Team />
       <Solutions />
       <TechStack />
-      <ServicesShowcase />
-      <Industries />
-      <Process />
       <Results />
+      <PageCta />
+    </>
+  );
+}
+
+function AboutPage() {
+  return (
+    <>
+      <PageHero
+        crumb="About"
+        eyebrow="About Forth Ledger"
+        title="Your trusted offshore"
+        accent="finance partner"
+        lede="Chartered accountants, finance specialists and technologists working as a seamless extension of your team."
+        icon="users"
+        stat="95%"
+        statLabel="Client retention"
+      />
+      <div id="page-content" />
+      <TrustedPerformance />
+      <WhyUs />
+      <Team />
+      <PageCta />
+    </>
+  );
+}
+
+function ServicesPage() {
+  return (
+    <>
+      <PageHero
+        crumb="Services"
+        eyebrow="What we do"
+        title="Accounting services built for"
+        accent="modern businesses"
+        lede="Bookkeeping, reporting, payroll, tax and CFO support, delivered by a dedicated offshore team with structured review."
+        icon="chart"
+        stat="100K+"
+        statLabel="Transactions processed"
+      />
+      <div id="page-content" />
+      <ServicesShowcase />
+      <Solutions />
+      <TechStack />
+      <PageCta />
+    </>
+  );
+}
+
+function IndustriesPage() {
+  return (
+    <>
+      <PageHero
+        crumb="Industries"
+        eyebrow="Who we serve"
+        title="Specialist support across"
+        accent="every industry"
+        lede="From CPA firms and construction to technology and hospitality, we adapt our workflows to how your sector operates."
+        icon="briefcase"
+        stat="5+"
+        statLabel="Countries active"
+      />
+      <div id="page-content" />
+      <Industries />
+      <PageCta />
+    </>
+  );
+}
+
+function ProcessPage() {
+  return (
+    <>
+      <PageHero
+        crumb="Process"
+        eyebrow="How we work"
+        title="A clear path from discovery to"
+        accent="delivery"
+        lede="A structured onboarding and review process, so you always know who is doing what, and when."
+        icon="checklist"
+        stat="1 week"
+        statLabel="Typical onboarding start"
+      />
+      <div id="page-content" />
+      <Process />
       <FAQ />
+      <PageCta />
+    </>
+  );
+}
+
+function InsightsPage() {
+  return (
+    <>
+      <PageHero
+        crumb="Insights"
+        eyebrow="Results & clients"
+        title="Proven results for"
+        accent="growing businesses"
+        lede="See the outcomes we deliver and the clients across the United States, Ireland and Singapore who trust us."
+        icon="chart"
+        stat="50+"
+        statLabel="Businesses scaled"
+      />
+      <div id="page-content" />
+      <Results />
+      <PageCta />
+    </>
+  );
+}
+
+function ContactPage() {
+  return (
+    <>
+      <PageHero
+        crumb="Contact"
+        eyebrow="Get in touch"
+        title="Let's build your"
+        accent="finance team"
+        lede="Book a free consultation. We reply within one business day."
+        icon="mail"
+        stat="1 day"
+        statLabel="Typical reply time"
+      />
+      <div id="page-content" />
       <CtaBand />
+      <FAQ />
+    </>
+  );
+}
+
+function NotFoundPage() {
+  return (
+    <section className="fl-not-found">
+      <div className="fl-container">
+        <div className="fl-not-found-code fl-grad-text">404</div>
+        <h1>Page not found</h1>
+        <p>The page you&rsquo;re looking for doesn&rsquo;t exist or has moved.</p>
+        <a href="/" className="fl-btn fl-btn-primary">
+          Back to home <SolarIcon name="arrowRight" size={15} />
+        </a>
+      </div>
+    </section>
+  );
+}
+
+const ROUTES = {
+  "/": { title: "Forth Ledger : Precision Beyond Borders", Page: HomePage },
+  "/about": { title: "About Us | Forth Ledger", Page: AboutPage },
+  "/services": { title: "Services | Forth Ledger", Page: ServicesPage },
+  "/industries": { title: "Industries | Forth Ledger", Page: IndustriesPage },
+  "/process": { title: "Our Process | Forth Ledger", Page: ProcessPage },
+  "/insights": { title: "Insights | Forth Ledger", Page: InsightsPage },
+  "/contact": { title: "Contact | Forth Ledger", Page: ContactPage },
+};
+
+/* ---------------- APP ---------------- */
+export default function App() {
+  const path = usePath();
+  useLinkInterception();
+  useTilt();
+
+  const route = ROUTES[path] || { title: "Page not found | Forth Ledger", Page: NotFoundPage };
+  const { Page } = route;
+
+  useEffect(() => {
+    document.title = route.title;
+  }, [route.title]);
+
+  // On page change: jump to the requested section, or the top.
+  useLayoutEffect(() => {
+    const hash = window.location.hash.slice(1);
+    const target = hash && document.getElementById(hash);
+    if (target) {
+      requestAnimationFrame(() => target.scrollIntoView({ behavior: "auto" }));
+    } else {
+      window.scrollTo({ top: 0, behavior: "instant" });
+    }
+  }, [path]);
+
+  return (
+    <div className="fl-root">
+      <ScrollProgress />
+      <Nav path={path} />
+      <main className="fl-page" key={path}>
+        <Page />
+      </main>
       <Footer />
       <BackToTop />
     </div>

@@ -6,6 +6,61 @@
     <link rel="icon" type="image/jpeg" href="/src/assets/fav.jpeg" />
     <title>Forth Ledger : Precision Beyond Borders</title>
     <meta name="description" content="Accounting outsourcing and financial management for high-growth, modern businesses." />
+
+    <!-- Self-hosted fonts, requested before any CSS so text never renders
+         in a wider fallback font first. -->
+    <link rel="preload" href="/fonts/inter-latin.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href="/fonts/work-sans-latin.woff2" as="font" type="font/woff2" crossorigin />
+    <style>
+      @font-face {
+        font-family: 'Inter';
+        font-style: normal;
+        font-weight: 100 900;
+        font-display: swap;
+        src: url(/fonts/inter-latin.woff2) format('woff2');
+      }
+      @font-face {
+        font-family: 'Work Sans';
+        font-style: normal;
+        font-weight: 100 900;
+        font-display: swap;
+        src: url(/fonts/work-sans-latin.woff2) format('woff2');
+      }
+      html { background: #07133c; }
+      body { transition: opacity 0.45s ease; }
+      /* Until fonts + app are ready: page hidden, entrance animations held. */
+      html.fl-loading body { opacity: 0; }
+      html.fl-loading *,
+      html.fl-loading *::before,
+      html.fl-loading *::after { animation-play-state: paused !important; }
+    </style>
+    <script>
+      (function () {
+        var root = document.documentElement;
+        var pending = 2;
+        var shown = false;
+        root.classList.add('fl-loading');
+        function show() {
+          if (shown) return;
+          shown = true;
+          root.classList.remove('fl-loading');
+        }
+        // Called once when fonts are ready and once when the app has rendered.
+        window.flReady = function () {
+          if (--pending <= 0) show();
+        };
+        if (document.fonts && document.fonts.load) {
+          Promise.all([
+            document.fonts.load('800 1em Inter'),
+            document.fonts.load('700 1em "Work Sans"'),
+          ]).then(window.flReady, window.flReady);
+        } else {
+          window.flReady();
+        }
+        // Never keep the page hidden for long, even on a slow connection.
+        setTimeout(show, 1500);
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>
